@@ -39,6 +39,11 @@ recorded state of the log (if any), and return a timestamped cosignature.
 
 A witness is an entity exposing an HTTP service identified by a name and a
 public key. Each witness is configured with a list of supported log public keys.
+<!--
+Observation and verification SHOULD be decoralated for a general witness
+Not all logs will be tlog, or even require the same verification
+That's something each log/client specification should enforce, and that logs have to communicate out of band.
+-->
 For each log, uniquely identified by its origin line, the witness is only
 required to keep track of the latest checkpoint it observed and verified.
 
@@ -46,33 +51,56 @@ Clients are not expected to communicate directly with the witnesses, logs and
 (sometimes) monitors are, but there is no authentication of requests beyond the
 validation of the signature on the checkpoint.
 
+<!-- question is what is a rarely active logs? one request per log per second sounds reasonable -->
 Witnesses are designed to scale well with a large number of rarely active logs,
 and to support diverse log designs, including low-latency and "serverless" logs,
 in order to enable the creation of a public network of interoperable witnesses.
 
 ## HTTP Interface
 
+<!--
+If witness are not exposed on the Internet, why would a name define them?
+Let's be clearer: a witness is a public key OR a domain name from which one can retrieve said public key
+-->
 A witness is defined by a name, a public key, and by two URL prefixes: the
 *submission prefix* for write APIs and the *monitoring prefix* for read APIs.
 
 A witness MAY use the same value for both the *submission prefix* and the
 *monitoring prefix*.
 
+<!--
+I don't understand the reasoning below
+Why is it advice to NOT expose a witness key material to the Internet?
+If clients are expected to fetch these keys out of bound, I don't think that's ideal
+If each witness has to provide their own key directory interface via HTTP, I think that's something the specification should define.
+-->
 If exposing the machine holding the witness key material directly to the
 Internet is undesirable, operators MAY use a [bastion][].
 
 ### add-checkpoint
 
+<!-- Personal API design: why have `add` while POST already convey the meaning? -->
 The `add-checkpoint` call is used to submit a new checkpoint to the witness,
 along with a consistency proof from a previous checkpoint, and returns the
 cosignature.
 
     POST <submission prefix>/add-checkpoint
 
+<!--
+why having SHOULD support keep-alive if the logs are rarely active?
+why would clients care about HTTP if witness are not exposed to the Internet?
+-->
 The request MUST be an HTTP POST. Clients SHOULD use, and witnesses SHOULD
 support, HTTP keep-alive HTTP connections to reduce latency and load due to
 connection establishment.
 
+<!--
+This is where I disagree. I think tlog witness SHOULD have that format, but not necessarily other logs.
+A public witness network SHOULD allow witnesses to support more than tlog format.
+I'd like the witness to only attest for the validity of a hash, and have versions/content type on request
+For instance, below Content-Type: text/tlog.cosignature
+This would allow to support binary format, such as the one proposed by [plexi](https://github.com/cloudflare/plexi/blob/main/plexi_core/src/proto/specs/types.proto#L8-L20)
+-->
 The request body MUST be a sequence of
   - an old size line,
   - zero or more consistency proof lines,
@@ -124,6 +152,7 @@ tree size of the latest cosigned checkpoint in decimal, followed by a newline
 If a client doesn't have information on the latest cosigned checkpoint, it MAY
 initially make a request with a old size of zero to obtain it.
 
+<!-- relevant for tlog, not for other logs -->
 The consistency proof lines MUST encode a Merkle Consistency Proof from the old
 size to the checkpoint size according to [RFC 6962][], Section 2.1.2. The proof
 MUST be empty if the old size is zero. If the Merkle Consistency Proof doesn't
@@ -138,6 +167,10 @@ If the origin is known, and the signature is valid, the witness MAY log the
 request even if the consistency proof doesn't verify (but MUST NOT cosign the
 checkpoint) as it might be proof of log misbehavior.
 
+<!--
+What happens in the event of a replay? cosignature have a timestamp, and the above conditions don't prevent replay to happen.
+Plexi covers this by clearly allowing replay for a period of time.
+-->
 If all the checks above pass, the witness MUST update its record of the latest
 cosigned checkpoint and respond with a "200 Success" HTTP status code. The
 response body MUST be a sequence of one or more [note][] signature lines, each
@@ -145,6 +178,11 @@ starting with the `—` character (U+2014) and ending with a newline character
 (U+000A). The signatures MUST be [cosignatures][] from the witness key(s) on the
 checkpoint.
 
+<!--
+While these are nice, these are not test vectors I can test my witness against.
+There is a separate project for that: [CCTV](https://github.com/C2SP/CCTV). The project does not define anything for witness.
+However, while basic, that's something [plexi provides](https://github.com/cloudflare/plexi/blob/main/plexi_core/tests/test-vectors.json)
+-->
 Example response body:
 
     — witness.example/w1 CMp+6LWBU0anHGH5aNDTJkH/gj79sG+T6+iP2ThYN5krrDJbR1HDnucjL39QsZTSvVjyQLrdk3DXDqI5G2HgLatVs0pWh6Up69HVOw==

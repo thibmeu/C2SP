@@ -108,6 +108,11 @@ Although multiple signature types are specified, implementations SHOULD select
 only the one(s) required for their design, and avoid supporting multiple ones at
 runtime if possible.
 
+<!--
+Definiting signature types here is great. It seems to go against the tlog witness or tlog cosignatures, which are specific to tlog, while these signatures define a registry for applications.
+I like this design better, and think that's how witness should be constructed (see plexi).
+-->
+
 * `0x01` — Ed25519 signatures as specified by this document.
 
 * `0x02` — ECDSA signatures as implemented by github.com/transparency-dev/witness.
